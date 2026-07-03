@@ -166,6 +166,8 @@ const demoProducts = [
 const state = {
   status: "All",
   search: "",
+  rfqSearch: "",
+  rfqStatus: "All Status",
   breakdownMode: "issuer",
   view: "dashboard",
   selectedProductId: null,
@@ -178,6 +180,13 @@ const state = {
 let activeProducts = demoProducts;
 let activeDataSource = "demo";
 let quotePreviewTimer = null;
+
+const rfqRows = [
+  { id: "RFQ-260701", product: "MSFT + NVDA FCN", status: "Requested", type: "Public", bestPricer: "J.P. Morgan", solveFor: "Note Price(%)" },
+  { id: "RFQ-260702", product: "AAPL ELN", status: "Quoted", type: "Public", bestPricer: "Morgan Stanley", solveFor: "Strike(%)" },
+  { id: "RFQ-260703", product: "TSLA + AMD Step Down FCN", status: "Quoted", type: "Private", bestPricer: "Goldman Sachs", solveFor: "Coupon p.a.(%)" },
+  { id: "RFQ-260704", product: "EUR/USD DCN", status: "Expired", type: "Private", bestPricer: "Citi", solveFor: "Bonus(%)" },
+];
 
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
@@ -767,12 +776,19 @@ function renderProducts() {
 }
 
 function renderRfqOverview() {
-  const rows = [
-    ["RFQ-260701", "MSFT + NVDA FCN", "Requested", "Public", "J.P. Morgan", "Note Price(%)"],
-    ["RFQ-260702", "AAPL ELN", "Quoted", "Public", "Morgan Stanley", "Strike(%)"],
-    ["RFQ-260703", "TSLA + AMD Step Down FCN", "Quoted", "Private", "Goldman Sachs", "Coupon p.a.(%)"],
-    ["RFQ-260704", "EUR/USD DCN", "Expired", "Private", "Citi", "Bonus(%)"],
-  ];
+  const query = state.rfqSearch.trim().toLowerCase();
+  const rows = rfqRows.filter((row) => {
+    const statusOk = state.rfqStatus === "All Status" || row.status === state.rfqStatus;
+    const haystack = [
+      row.id,
+      row.product,
+      row.status,
+      row.type,
+      row.bestPricer,
+      row.solveFor,
+    ].join(" ").toLowerCase();
+    return statusOk && (!query || haystack.includes(query));
+  });
   const table = document.getElementById("rfqTable");
   if (!table) return;
   table.innerHTML = `
@@ -784,11 +800,16 @@ function renderRfqOverview() {
       <div>Best Pricer</div>
       <div>Solve For</div>
     </div>
-    ${rows.map((row) => `
+    ${rows.length ? rows.map((row) => `
       <button class="rfq-row" type="button">
-        ${row.map((cell) => `<div>${cell}</div>`).join("")}
+        <div>${row.id}</div>
+        <div>${row.product}</div>
+        <div>${row.status}</div>
+        <div>${row.type}</div>
+        <div>${row.bestPricer}</div>
+        <div>${row.solveFor}</div>
       </button>
-    `).join("")}
+    `).join("") : `<div class="rfq-empty">No RFQs match the current filters.</div>`}
   `;
 }
 
@@ -1266,6 +1287,16 @@ document.getElementById("statusFilter").addEventListener("change", (event) => {
 document.getElementById("searchInput").addEventListener("input", (event) => {
   state.search = event.target.value;
   renderProducts();
+});
+
+document.getElementById("rfqSearchInput").addEventListener("input", (event) => {
+  state.rfqSearch = event.target.value;
+  renderRfqOverview();
+});
+
+document.getElementById("rfqStatusFilter").addEventListener("change", (event) => {
+  state.rfqStatus = event.target.value;
+  renderRfqOverview();
 });
 
 document.getElementById("termsheetUploadForm").addEventListener("submit", handleTermsheetUpload);

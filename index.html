@@ -198,9 +198,14 @@
               <div class="filters">
                 <label class="search-box">
                   <span aria-hidden="true">⌕</span>
-                  <input type="search" placeholder="Search RFQ, product, pricer" />
+                  <input id="rfqSearchInput" type="search" placeholder="Search RFQ, product, pricer" />
                 </label>
-                <select><option>All Status</option><option>Requested</option><option>Quoted</option></select>
+                <select id="rfqStatusFilter">
+                  <option>All Status</option>
+                  <option>Requested</option>
+                  <option>Quoted</option>
+                  <option>Expired</option>
+                </select>
               </div>
             </div>
             <div class="rfq-table" id="rfqTable"></div>

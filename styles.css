@@ -725,6 +725,14 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.rfq-empty {
+  padding: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 .monitor-card {
   padding: 12px;
 }
