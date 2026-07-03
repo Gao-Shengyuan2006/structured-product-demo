@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Structured Product Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="workspace">
+      <aside class="sidebar" aria-label="WealthPilot navigation">
+        <div class="brand-row">
+          <div class="brand-mark">W</div>
+          <div>
+            <div class="brand-name">Wealth Pilot</div>
+            <div class="brand-subtitle">Enterprise</div>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <a href="#">Urgent Items</a>
+          <a class="active" href="#">My Clients</a>
+          <div class="nav-group">
+            <a href="#">My Clients</a>
+            <a class="nested current" href="#dashboard" data-view-link="dashboard">Structured Products</a>
+            <a class="nested" href="#new-quote" data-view-link="newQuote">SP New Quote</a>
+            <a class="nested" href="#rfq-overview" data-view-link="rfqOverview">SP RFQ Overview</a>
+            <a class="nested" href="#lifecycle-list" data-view-link="lifecycleList">SP Lifecycle List</a>
+          </div>
+          <a href="#">My Trade</a>
+          <a href="#">Holdings</a>
+          <a href="#">Insights</a>
+          <a href="#">AI Assistant</a>
+          <a href="#">Settings</a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="currency-row"><span>Display Currency</span><strong>USD</strong></div>
+          <div class="user-row"><span class="avatar">T</span><span>turoid</span><span class="root-pill">ROOT</span></div>
+        </div>
+      </aside>
+
+      <div class="content">
+        <header class="topbar" aria-label="Global filters">
+          <button class="sidebar-toggle" type="button" aria-label="Toggle sidebar">▥</button>
+          <label>RM:<select><option>All RMs</option></select></label>
+          <label>Current client:<select><option>All clients</option></select></label>
+          <label>Custodian:<select><option>All custodians</option></select></label>
+          <label class="backend-field">Backend URL:<input id="apiBaseInput" placeholder="Leave blank for demo backend" /></label>
+        </header>
+
+        <main class="app-shell">
+          <header class="page-header" id="mainPageHeader">
+            <div>
+              <p class="eyebrow">WealthPilot</p>
+              <h1>Structured Product Dashboard</h1>
+              <p class="data-source" id="dataSourceText">Demo backend · use Backend URL only when connecting to the real WealthPilot portal</p>
+            </div>
+            <div class="header-actions">
+              <button class="icon-button" type="button" id="refreshButton" aria-label="Refresh data" title="Refresh data">
+                <span aria-hidden="true">↻</span>
+              </button>
+              <button class="secondary-button" type="button" data-view-button="uploadTermsheet">Upload Term Sheet</button>
+              <button class="primary-button" type="button" data-view-button="newQuote">New RFQ</button>
+            </div>
+          </header>
+
+          <section class="panel upload-panel hidden" data-view="uploadTermsheet" aria-labelledby="uploadTermsheetTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Structured Products</p>
+                <h2 id="uploadTermsheetTitle">Upload Term Sheet</h2>
+                <p class="data-source">Demo backend implements the same upload-local → termsheet upload shape.</p>
+              </div>
+            </div>
+            <form class="upload-form" id="termsheetUploadForm">
+              <label>Client ID<input name="client_id" inputmode="numeric" placeholder="e.g. 123" required /></label>
+              <label>Ticket ID<input name="ticket_id" inputmode="numeric" placeholder="Trade ticket id" required /></label>
+              <label>Term Sheet PDF<input name="files" type="file" accept=".pdf,application/pdf" multiple required /></label>
+              <div class="upload-actions">
+                <button class="primary-button" type="submit">Upload and Process</button>
+                <span class="upload-status" id="uploadStatus">Leave Backend URL blank to use the demo backend.</span>
+              </div>
+            </form>
+          </section>
+
+          <div data-view="dashboard">
+            <section class="summary-grid" aria-label="Structured product summary" id="summaryGrid"></section>
+
+            <section class="dashboard-grid">
+              <section class="panel issue-panel" aria-labelledby="issueBreakdownTitle">
+                <div class="panel-heading">
+                  <div>
+                    <p class="section-kicker">Before Detail View</p>
+                    <h2 id="issueBreakdownTitle">Issue Breakdown</h2>
+                  </div>
+                  <select id="breakdownMode" aria-label="Breakdown mode">
+                    <option value="issuer">Issuer</option>
+                    <option value="productType">Product Type</option>
+                    <option value="currency">Currency</option>
+                    <option value="status">Lifecycle Status</option>
+                  </select>
+                </div>
+                <div class="breakdown-list" id="breakdownList"></div>
+              </section>
+
+              <section class="panel calendar-panel" aria-labelledby="calendarTitle">
+                <div class="panel-heading">
+                  <div>
+                    <p class="section-kicker">Calendar Space</p>
+                    <h2 id="calendarTitle">Upcoming Events</h2>
+                  </div>
+                  <span class="subtle-pill">Next 90 days</span>
+                </div>
+                <div class="event-list" id="eventList"></div>
+              </section>
+            </section>
+
+            <section class="panel monitor-panel" aria-labelledby="monitorTitle">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Current Logic</p>
+                  <h2 id="monitorTitle">Underlying Price Monitor / Lifecycle Valuation Inputs</h2>
+                </div>
+                <span class="subtle-pill">Latest close ÷ initial level</span>
+              </div>
+              <div class="monitor-grid" id="monitorGrid"></div>
+            </section>
+          </div>
+
+          <section class="panel lifecycle-panel" data-view="lifecycleList" aria-labelledby="lifecycleTitle">
+            <div class="panel-heading list-heading">
+              <div>
+                <p class="section-kicker">Reusable Lifecycle List</p>
+                <h2 id="lifecycleTitle">Products</h2>
+              </div>
+              <div class="filters">
+                <label class="search-box">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="searchInput" type="search" placeholder="Search product, issuer, ISIN" />
+                </label>
+                <select id="statusFilter" aria-label="Status filter">
+                  <option value="All">All Status</option>
+                  <option value="Outstanding">Outstanding</option>
+                  <option value="Early Called">Early Called</option>
+                  <option value="Matured">Matured</option>
+                  <option value="Expired">Expired</option>
+                </select>
+              </div>
+            </div>
+            <div class="product-list" id="productList"></div>
+          </section>
+
+          <section class="detail-page hidden" data-view="lifecycleDetail" aria-labelledby="detailTitle">
+            <div id="detailContent"></div>
+          </section>
+
+          <section class="panel quote-panel hidden" data-view="newQuote" aria-labelledby="newQuoteTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Structured Products</p>
+                <h2 id="newQuoteTitle">SP New Quote</h2>
+              </div>
+              <div class="product-tabs" aria-label="Product family tabs">
+                <button class="tab active" type="button">FCN</button>
+                <button class="tab" type="button">AQ</button>
+                <button class="tab" type="button">DQ</button>
+                <button class="tab" type="button">BEN</button>
+                <button class="tab" type="button">DCN</button>
+                <button class="tab" type="button">ELN</button>
+                <button class="tab" type="button">Step-down FCN</button>
+              </div>
+            </div>
+            <form class="quote-form">
+              <label>ISIN<input value="AAPL.O" /></label>
+              <label>Quotation Type<select><option>Public</option><option>Private</option></select></label>
+              <label>Custodian<select><option>JP Morgan</option><option>Morgan Stanley</option></select></label>
+              <label>Currency<select><option>USD</option><option>HKD</option><option>EUR</option></select></label>
+              <label>Underlying(1-4)<input value="AAPL.O" /></label>
+              <label>Solve For<select><option>Strike(%)</option><option>Coupon p.a.(%)</option><option>Note Price(%)</option></select></label>
+              <label>Strike(%)<input value="100" /></label>
+              <label>KO Type<select><option>Period End</option><option>Daily Close</option></select></label>
+              <label>KO(%)<input value="100" /></label>
+              <label>Coupon p.a.(%)<input value="12" /></label>
+              <label>NotePrice(%)<input value="99" /></label>
+              <label>Tenor(m)<input value="6" /></label>
+              <label>Barrier Type<select><option>NONE</option><option>European</option><option>American</option></select></label>
+              <label>KI(%)<input /></label>
+            </form>
+          </section>
+
+          <section class="panel rfq-panel hidden" data-view="rfqOverview" aria-labelledby="rfqOverviewTitle">
+            <div class="panel-heading list-heading">
+              <div>
+                <p class="section-kicker">Structured Products</p>
+                <h2 id="rfqOverviewTitle">SP RFQ Overview</h2>
+              </div>
+              <div class="filters">
+                <label class="search-box">
+                  <span aria-hidden="true">⌕</span>
+                  <input type="search" placeholder="Search RFQ, product, pricer" />
+                </label>
+                <select><option>All Status</option><option>Requested</option><option>Quoted</option></select>
+              </div>
+            </div>
+            <div class="rfq-table" id="rfqTable"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

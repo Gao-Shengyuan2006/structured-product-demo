@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: wealthpilot-structured-product-demo
+    runtime: node
+    plan: free
+    buildCommand: "npm install && python3 -m pip install --user -r requirements.txt"
+    startCommand: "npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PDF_PARSER_PYTHON
+        value: python3
