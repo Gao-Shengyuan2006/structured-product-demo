@@ -169,10 +169,15 @@ const state = {
   breakdownMode: "issuer",
   view: "dashboard",
   selectedProductId: null,
+  quoteProductType: "FCN",
+  quotePreview: null,
+  quotePreviewStatus: "idle",
+  quoteFormTouched: false,
 };
 
 let activeProducts = demoProducts;
 let activeDataSource = "demo";
+let quotePreviewTimer = null;
 
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
@@ -275,6 +280,18 @@ function normalizeBackendProduct(position) {
 function parseCurrency(amount) {
   const match = String(amount || "").match(/\b[A-Z]{3}\b$/);
   return match ? match[0] : null;
+}
+
+function parseNumericInput(value, fallback = 0) {
+  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function monthDiff(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 6;
+  return Math.max(1, Math.round((end - start) / 2629800000));
 }
 
 async function loadProductsFromBackend() {
@@ -775,6 +792,283 @@ function renderRfqOverview() {
   `;
 }
 
+function quoteSourceProducts() {
+  return activeProducts
+    .filter((product) => product.keyParams?.underlyings?.length)
+    .sort((left, right) => {
+      const leftUploaded = String(left.id).startsWith("uploaded-") ? 0 : 1;
+      const rightUploaded = String(right.id).startsWith("uploaded-") ? 0 : 1;
+      return leftUploaded - rightUploaded;
+    });
+}
+
+function renderQuoteSourceOptions() {
+  const select = document.getElementById("quoteSourceProduct");
+  if (!select) return;
+  const current = select.value;
+  const sources = quoteSourceProducts();
+  select.innerHTML = `
+    <option value="">Manual input</option>
+    ${sources.map((product) => `
+      <option value="${product.id}">${String(product.id).startsWith("uploaded-") ? "Parsed" : "Demo"} · ${product.title} · ${product.isin}</option>
+    `).join("")}
+  `;
+
+  if (current && sources.some((product) => product.id === current)) {
+    select.value = current;
+    return;
+  }
+
+  if (!state.quoteFormTouched && sources.length) {
+    select.value = sources[0].id;
+    applyProductToQuoteForm(sources[0]);
+  }
+}
+
+function setQuoteField(name, value) {
+  const field = document.querySelector(`#quoteForm [name="${name}"]`);
+  if (!field) return;
+  const normalized = value ?? "";
+  if (field.tagName === "SELECT" && normalized && !Array.from(field.options).some((option) => option.value === String(normalized))) {
+    field.add(new Option(String(normalized), String(normalized)));
+  }
+  field.value = normalized;
+}
+
+function applyProductToQuoteForm(product) {
+  if (!product) return;
+  const underlyings = product.keyParams?.underlyings || [];
+  const coupon = parseNumericInput(product.keyParams?.couponReturn, 0);
+  const strike = parseNumericInput(product.keyParams?.strike, 100);
+  const tenor = monthDiff(product.issueDate, product.maturityDate);
+
+  state.quoteProductType = product.productType?.includes("Step") ? "Step-down FCN" : product.productType || "FCN";
+  setQuoteField("isin", product.isin || "");
+  setQuoteField("custodian", product.issuer || "JP Morgan");
+  setQuoteField("currency", product.currency || parseCurrency(product.amount) || "USD");
+  setQuoteField("underlyings", underlyings.map((item) => item.ticker || item.identifier || item.quoteTicker).filter(Boolean).join(", "));
+  setQuoteField("strike", strike || "");
+  setQuoteField("ko", parseNumericInput(product.keyParams?.koBarrier, 100) || 100);
+  setQuoteField("couponPa", coupon || "");
+  setQuoteField("notePrice", "99");
+  setQuoteField("tenor", tenor);
+  setQuoteField("ki", parseNumericInput(product.keyParams?.kiBarrier, "") || "");
+  syncQuoteTabs();
+}
+
+function collectQuoteForm() {
+  const form = document.getElementById("quoteForm");
+  if (!form) return null;
+  const data = new FormData(form);
+  const sourceProductId = String(data.get("sourceProductId") || "");
+  const sourceProduct = activeProducts.find((product) => product.id === sourceProductId);
+  const underlyings = String(data.get("underlyings") || "")
+    .split(/[,;+]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    sourceProductId,
+    sourceProduct,
+    productType: state.quoteProductType,
+    isin: String(data.get("isin") || "").trim(),
+    quotationType: String(data.get("quotationType") || "Public"),
+    custodian: String(data.get("custodian") || "JP Morgan"),
+    currency: String(data.get("currency") || "USD"),
+    underlyings,
+    solveFor: String(data.get("solveFor") || "Strike(%)"),
+    strike: parseNumericInput(data.get("strike"), 100),
+    koType: String(data.get("koType") || "Period End"),
+    ko: parseNumericInput(data.get("ko"), 100),
+    couponPa: parseNumericInput(data.get("couponPa"), 0),
+    notePrice: parseNumericInput(data.get("notePrice"), 100),
+    tenor: parseNumericInput(data.get("tenor"), 6),
+    barrierType: String(data.get("barrierType") || "NONE"),
+    ki: parseNumericInput(data.get("ki"), null),
+  };
+}
+
+function renderQuotePreview() {
+  const node = document.getElementById("quotePreview");
+  if (!node) return;
+  const preview = state.quotePreview;
+  const statusText = state.quotePreviewStatus === "loading"
+    ? "Calculating demo quote preview..."
+    : state.quotePreviewStatus === "error"
+      ? "Preview unavailable. Check the demo backend."
+      : "Demo preview generated from current form inputs.";
+
+  if (!preview) {
+    node.innerHTML = `<div class="quote-preview-empty">${statusText}</div>`;
+    return;
+  }
+
+  node.innerHTML = `
+    <div class="quote-preview-header">
+      <div>
+        <p class="section-kicker">Mock Quote Preview</p>
+        <h3>${preview.productTitle}</h3>
+      </div>
+      <span class="subtle-pill">${preview.source}</span>
+    </div>
+    <div class="quote-preview-grid">
+      <article>
+        <span>Indicative Note Price</span>
+        <strong>${preview.indicativeNotePrice}</strong>
+      </article>
+      <article>
+        <span>Estimated Coupon p.a.</span>
+        <strong>${preview.estimatedCouponPa}</strong>
+      </article>
+      <article>
+        <span>Worst Level</span>
+        <strong>${preview.worstLevel}</strong>
+      </article>
+      <article>
+        <span>Scenario</span>
+        <strong>${preview.scenario}</strong>
+      </article>
+    </div>
+    <div class="quote-preview-body">
+      <div>
+        <h4>Parsed Inputs</h4>
+        <p>${preview.parsedInputs}</p>
+      </div>
+      <div>
+        <h4>Pricing Shell</h4>
+        <p>${preview.pricingNote}</p>
+      </div>
+    </div>
+    <table class="quote-preview-table">
+      <thead><tr><th>Underlying</th><th>Initial</th><th>Demo Market Level</th><th>Latest</th><th>Strike Check</th></tr></thead>
+      <tbody>
+        ${(preview.underlyings || []).map((item) => `
+          <tr>
+            <td>${item.ticker}</td>
+            <td>${item.initialLevel}</td>
+            <td>${item.levelPct}</td>
+            <td>${item.latestPrice}</td>
+            <td>${item.strikeStatus}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <div class="quote-preview-status">${statusText}</div>
+  `;
+}
+
+async function updateQuotePreviewNow() {
+  const quote = collectQuoteForm();
+  if (!quote) return;
+  state.quotePreviewStatus = "loading";
+  renderQuotePreview();
+  try {
+    const body = {
+      ...quote,
+      sourceProduct: quote.sourceProduct ? {
+        id: quote.sourceProduct.id,
+        title: quote.sourceProduct.title,
+        productType: quote.sourceProduct.productType,
+        isin: quote.sourceProduct.isin,
+        issuer: quote.sourceProduct.issuer,
+        amount: quote.sourceProduct.amount,
+        issueDate: quote.sourceProduct.issueDate,
+        maturityDate: quote.sourceProduct.maturityDate,
+        keyParams: quote.sourceProduct.keyParams,
+      } : null,
+    };
+    delete body.sourceProductId;
+    const response = await fetch(apiUrl("/api/sp/quote/preview"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `quote preview failed (${response.status})`);
+    state.quotePreview = payload.preview;
+    state.quotePreviewStatus = "ready";
+  } catch {
+    state.quotePreview = buildLocalQuotePreview(quote);
+    state.quotePreviewStatus = "error";
+  }
+  renderQuotePreview();
+}
+
+function scheduleQuotePreview() {
+  clearTimeout(quotePreviewTimer);
+  quotePreviewTimer = setTimeout(() => {
+    void updateQuotePreviewNow();
+  }, 180);
+}
+
+function buildLocalQuotePreview(quote) {
+  const source = quote.sourceProduct;
+  const sourceUnderlyings = source?.keyParams?.underlyings || [];
+  const underlyings = quote.underlyings.map((ticker, index) => {
+    const sourceItem = sourceUnderlyings[index] || {};
+    const initialLevel = Number(sourceItem.initialLevel) || 100 + index * 20;
+    const levelPct = underlyingLevel(sourceItem) || (106 + index * 4);
+    const latestPrice = (initialLevel * levelPct) / 100;
+    return {
+      ticker,
+      initialLevel: initialLevel.toLocaleString(undefined, { maximumFractionDigits: 4 }),
+      levelPct: formatPct(levelPct),
+      latestPrice: latestPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+      strikeStatus: levelPct >= quote.strike ? "Above Strike" : "Below Strike",
+    };
+  });
+  const worst = Math.min(...underlyings.map((item) => parseNumericInput(item.levelPct, 100)));
+  const couponBump = Math.max(0, (100 - quote.strike) * 0.08) + Math.max(0, quote.ko - 100) * 0.03;
+  const estimatedCoupon = quote.solveFor === "Coupon p.a.(%)" ? quote.couponPa + couponBump : quote.couponPa;
+  const notePrice = quote.solveFor === "Note Price(%)"
+    ? quote.notePrice
+    : Math.max(88, Math.min(104, quote.notePrice + (worst - 100) * 0.03 - Math.max(0, quote.couponPa - 10) * 0.08));
+
+  return {
+    productTitle: `${quote.underlyings.join(" + ") || "Manual"} ${quote.productType}`,
+    source: source ? "parsed termsheet + demo market level" : "manual input + demo market level",
+    indicativeNotePrice: `${notePrice.toFixed(2)}%`,
+    estimatedCouponPa: `${estimatedCoupon.toFixed(2)}%`,
+    worstLevel: formatPct(worst),
+    scenario: worst >= quote.strike ? "Above strike" : "Below strike",
+    parsedInputs: `ISIN ${quote.isin || "—"} · ${quote.currency} · ${quote.tenor}m · strike ${quote.strike}% · KO ${quote.ko}%`,
+    pricingNote: "Mock only. Later the pricing SDK can replace this shell with fair value, Greeks, scenario probabilities, and dealer quote output.",
+    underlyings,
+  };
+}
+
+function syncQuoteTabs() {
+  document.querySelectorAll("[data-quote-product]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.quoteProduct === state.quoteProductType);
+  });
+}
+
+function initializeQuoteControls() {
+  renderQuoteSourceOptions();
+  syncQuoteTabs();
+  const form = document.getElementById("quoteForm");
+  if (form) {
+    form.addEventListener("input", () => {
+      state.quoteFormTouched = true;
+      scheduleQuotePreview();
+    });
+    form.addEventListener("change", (event) => {
+      if (event.target?.name === "sourceProductId") {
+        const product = activeProducts.find((item) => item.id === event.target.value);
+        if (product) {
+          applyProductToQuoteForm(product);
+          state.quoteFormTouched = true;
+        }
+      } else {
+        state.quoteFormTouched = true;
+      }
+      scheduleQuotePreview();
+    });
+  }
+  scheduleQuotePreview();
+}
+
 function viewFromHash() {
   const hash = window.location.hash.replace("#", "");
   if (hash.startsWith("lifecycle-detail/")) {
@@ -799,6 +1093,10 @@ function setView(view, opts = {}) {
     link.classList.toggle("current", link.dataset.viewLink === view);
   });
   if (view === "rfqOverview") renderRfqOverview();
+  if (view === "newQuote") {
+    renderQuoteSourceOptions();
+    scheduleQuotePreview();
+  }
   if (!opts.skipHash) {
     const hash = view === "lifecycleDetail" && state.selectedProductId
       ? `lifecycle-detail/${encodeURIComponent(state.selectedProductId)}`
@@ -946,6 +1244,8 @@ function renderAll() {
   renderMonitor();
   renderProducts();
   renderRfqOverview();
+  renderQuoteSourceOptions();
+  scheduleQuotePreview();
   if (state.view === "lifecycleDetail" && state.selectedProductId) {
     openDetail(state.selectedProductId);
   } else {
@@ -992,6 +1292,15 @@ document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-open-detail]");
   if (trigger) {
     openDetail(trigger.dataset.openDetail);
+    return;
+  }
+
+  const quoteTab = event.target.closest("[data-quote-product]");
+  if (quoteTab) {
+    state.quoteProductType = quoteTab.dataset.quoteProduct;
+    state.quoteFormTouched = true;
+    syncQuoteTabs();
+    scheduleQuotePreview();
   }
 });
 
@@ -1006,4 +1315,5 @@ window.addEventListener("hashchange", () => {
 
 state.view = viewFromHash();
 initializeBackendControls();
+initializeQuoteControls();
 hydrateProducts();

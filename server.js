@@ -389,6 +389,51 @@ function buildPerformanceSeries(product) {
   };
 }
 
+function buildQuotePreview(payload) {
+  const source = payload.sourceProduct || null;
+  const sourceUnderlyings = source?.keyParams?.underlyings || [];
+  const requestedUnderlyings = Array.isArray(payload.underlyings) && payload.underlyings.length
+    ? payload.underlyings
+    : sourceUnderlyings.map((item) => item.ticker || item.identifier || item.quoteTicker).filter(Boolean);
+  const strike = parseBarrierPercent(payload.strike, 100);
+  const ko = parseBarrierPercent(payload.ko, 100);
+  const couponPa = parseBarrierPercent(payload.couponPa, 0);
+  const notePriceInput = parseBarrierPercent(payload.notePrice, 100);
+  const underlyings = requestedUnderlyings.map((ticker, index) => {
+    const sourceItem = sourceUnderlyings[index] || {};
+    const initialLevel = Number(sourceItem.initialLevel) || 100 + index * 20;
+    const levelPct = Number(sourceItem.levelPct) || marketLevelForTicker(ticker, index);
+    const latestPrice = (initialLevel * levelPct) / 100;
+    return {
+      ticker,
+      initialLevel: initialLevel.toLocaleString(undefined, { maximumFractionDigits: 4 }),
+      levelPct: `${levelPct.toFixed(2)}%`,
+      latestPrice: latestPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+      strikeStatus: levelPct >= strike ? "Above Strike" : "Below Strike",
+      rawLevelPct: levelPct,
+    };
+  });
+  const levels = underlyings.map((item) => item.rawLevelPct).filter(Number.isFinite);
+  const worst = levels.length ? Math.min(...levels) : 100;
+  const couponBump = Math.max(0, (100 - strike) * 0.08) + Math.max(0, ko - 100) * 0.03;
+  const estimatedCoupon = payload.solveFor === "Coupon p.a.(%)" ? couponPa + couponBump : couponPa;
+  const notePrice = payload.solveFor === "Note Price(%)"
+    ? notePriceInput
+    : Math.max(88, Math.min(104, notePriceInput + (worst - 100) * 0.03 - Math.max(0, couponPa - 10) * 0.08));
+
+  return {
+    productTitle: `${requestedUnderlyings.join(" + ") || "Manual"} ${payload.productType || source?.productType || "Structured Product"}`,
+    source: source ? "parsed termsheet + demo market level" : "manual input + demo market level",
+    indicativeNotePrice: `${notePrice.toFixed(2)}%`,
+    estimatedCouponPa: `${estimatedCoupon.toFixed(2)}%`,
+    worstLevel: `${worst.toFixed(2)}%`,
+    scenario: worst >= strike ? "Above strike" : "Below strike",
+    parsedInputs: `ISIN ${payload.isin || source?.isin || "—"} · ${payload.currency || amountCurrency(source || {})} · ${payload.tenor || 6}m · strike ${strike}% · KO ${ko}%`,
+    pricingNote: "Mock only. Replace this endpoint with the pricing SDK/dealer quote engine for fair value, scenario probability, Greeks, and dealer quote output.",
+    underlyings: underlyings.map(({ rawLevelPct, ...item }) => item),
+  };
+}
+
 function notionalNumber(product) {
   const parsed = Number(String(product.amount || "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -654,6 +699,21 @@ async function handleApi(req, res, url) {
       page: 1,
       pageSize: rows.length,
       source: "demo-backend",
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/sp/quote/preview") {
+    const body = await readBody(req);
+    let payload = {};
+    try {
+      payload = JSON.parse(body.toString("utf8") || "{}");
+    } catch {
+      payload = {};
+    }
+    sendJson(res, 200, {
+      preview: buildQuotePreview(payload),
+      source: "demo-backend-quote-preview",
     });
     return;
   }

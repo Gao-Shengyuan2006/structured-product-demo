@@ -159,32 +159,34 @@
                 <p class="section-kicker">Structured Products</p>
                 <h2 id="newQuoteTitle">SP New Quote</h2>
               </div>
-              <div class="product-tabs" aria-label="Product family tabs">
-                <button class="tab active" type="button">FCN</button>
-                <button class="tab" type="button">AQ</button>
-                <button class="tab" type="button">DQ</button>
-                <button class="tab" type="button">BEN</button>
-                <button class="tab" type="button">DCN</button>
-                <button class="tab" type="button">ELN</button>
-                <button class="tab" type="button">Step-down FCN</button>
+              <div class="product-tabs" aria-label="Product family tabs" id="quoteProductTabs">
+                <button class="tab active" type="button" data-quote-product="FCN">FCN</button>
+                <button class="tab" type="button" data-quote-product="AQ">AQ</button>
+                <button class="tab" type="button" data-quote-product="DQ">DQ</button>
+                <button class="tab" type="button" data-quote-product="BEN">BEN</button>
+                <button class="tab" type="button" data-quote-product="DCN">DCN</button>
+                <button class="tab" type="button" data-quote-product="ELN">ELN</button>
+                <button class="tab" type="button" data-quote-product="Step-down FCN">Step-down FCN</button>
               </div>
             </div>
-            <form class="quote-form">
-              <label>ISIN<input value="AAPL.O" /></label>
-              <label>Quotation Type<select><option>Public</option><option>Private</option></select></label>
-              <label>Custodian<select><option>JP Morgan</option><option>Morgan Stanley</option></select></label>
-              <label>Currency<select><option>USD</option><option>HKD</option><option>EUR</option></select></label>
-              <label>Underlying(1-4)<input value="AAPL.O" /></label>
-              <label>Solve For<select><option>Strike(%)</option><option>Coupon p.a.(%)</option><option>Note Price(%)</option></select></label>
-              <label>Strike(%)<input value="100" /></label>
-              <label>KO Type<select><option>Period End</option><option>Daily Close</option></select></label>
-              <label>KO(%)<input value="100" /></label>
-              <label>Coupon p.a.(%)<input value="12" /></label>
-              <label>NotePrice(%)<input value="99" /></label>
-              <label>Tenor(m)<input value="6" /></label>
-              <label>Barrier Type<select><option>NONE</option><option>European</option><option>American</option></select></label>
-              <label>KI(%)<input /></label>
+            <form class="quote-form" id="quoteForm">
+              <label>Parsed Term Sheet Source<select name="sourceProductId" id="quoteSourceProduct"></select></label>
+              <label>ISIN<input name="isin" value="AAPL.O" /></label>
+              <label>Quotation Type<select name="quotationType"><option>Public</option><option>Private</option></select></label>
+              <label>Custodian<select name="custodian"><option>JP Morgan</option><option>Morgan Stanley</option><option>HSBC</option><option>Goldman Sachs</option><option>UBS</option></select></label>
+              <label>Currency<select name="currency"><option>USD</option><option>HKD</option><option>EUR</option></select></label>
+              <label>Underlying(1-4)<input name="underlyings" value="AAPL.O" /></label>
+              <label>Solve For<select name="solveFor"><option>Strike(%)</option><option>Coupon p.a.(%)</option><option>Note Price(%)</option></select></label>
+              <label>Strike(%)<input name="strike" value="100" /></label>
+              <label>KO Type<select name="koType"><option>Period End</option><option>Daily Close</option></select></label>
+              <label>KO(%)<input name="ko" value="100" /></label>
+              <label>Coupon p.a.(%)<input name="couponPa" value="12" /></label>
+              <label>NotePrice(%)<input name="notePrice" value="99" /></label>
+              <label>Tenor(m)<input name="tenor" value="6" /></label>
+              <label>Barrier Type<select name="barrierType"><option>NONE</option><option>European</option><option>American</option></select></label>
+              <label>KI(%)<input name="ki" /></label>
             </form>
+            <section class="quote-preview" id="quotePreview" aria-live="polite"></section>
           </section>
 
           <section class="panel rfq-panel hidden" data-view="rfqOverview" aria-labelledby="rfqOverviewTitle">
