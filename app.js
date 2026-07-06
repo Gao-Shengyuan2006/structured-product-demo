@@ -168,6 +168,7 @@ const state = {
   search: "",
   rfqSearch: "",
   rfqStatus: "All Status",
+  productSort: { key: "product", direction: "asc" },
   breakdownMode: "issuer",
   view: "dashboard",
   selectedProductId: null,
@@ -369,6 +370,12 @@ function initializeBackendControls() {
 function formatPct(value) {
   if (!Number.isFinite(value)) return "—";
   return `${value.toFixed(2)}%`;
+}
+
+function formatNumber(value, digits = 2) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value ?? "—";
+  return parsed.toLocaleString(undefined, { maximumFractionDigits: digits });
 }
 
 function statusClass(status) {
@@ -640,6 +647,35 @@ function filteredProducts() {
   });
 }
 
+function productSortValue(product, key) {
+  if (key === "issuer") return product.issuer || "";
+  if (key === "isin") return product.isin || "";
+  if (key === "amount") return Number(String(product.amount || "").replace(/[^0-9.-]/g, "")) || 0;
+  if (key === "worst") return worstLevel(product) ?? -Infinity;
+  if (key === "status") return product.status || "";
+  if (key === "nextEvent") return product.nextEvent?.name || "";
+  if (key === "paymentDate") return product.nextEvent?.paymentDate || "";
+  return product.title || "";
+}
+
+function sortedProducts(rows) {
+  const { key, direction } = state.productSort;
+  const multiplier = direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const leftValue = productSortValue(left, key);
+    const rightValue = productSortValue(right, key);
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+      return (leftValue - rightValue) * multiplier;
+    }
+    return String(leftValue).localeCompare(String(rightValue)) * multiplier;
+  });
+}
+
+function sortIndicator(key) {
+  if (state.productSort.key !== key) return "";
+  return state.productSort.direction === "asc" ? " ↑" : " ↓";
+}
+
 function renderSummary() {
   const upcomingEvents = buildUpcomingEvents();
   const counts = [
@@ -731,11 +767,11 @@ function renderMonitor() {
             </div>
             <div class="metric-box">
               <div class="metric-label">Latest Close</div>
-              <div class="metric-value">${first.latestPrice ?? "—"}</div>
+              <div class="metric-value">${formatNumber(first.latestPrice)}</div>
             </div>
             <div class="metric-box">
               <div class="metric-label">Initial</div>
-              <div class="metric-value">${first.initialLevel ?? "—"}</div>
+              <div class="metric-value">${formatNumber(first.initialLevel)}</div>
             </div>
           </div>
         </article>
@@ -745,33 +781,48 @@ function renderMonitor() {
 }
 
 function renderProducts() {
-  const rows = filteredProducts();
+  const rows = sortedProducts(filteredProducts());
   document.getElementById("productList").innerHTML = rows.length
-    ? rows.map((product) => {
+    ? `
+      <div class="product-table-wrap">
+        <table class="product-table">
+          <thead>
+            <tr>
+              <th><button type="button" data-product-sort="product">Product${sortIndicator("product")}</button></th>
+              <th><button type="button" data-product-sort="issuer">Issuer${sortIndicator("issuer")}</button></th>
+              <th><button type="button" data-product-sort="isin">ISIN${sortIndicator("isin")}</button></th>
+              <th><button type="button" data-product-sort="amount">Amount${sortIndicator("amount")}</button></th>
+              <th><button type="button" data-product-sort="worst">Worst Level${sortIndicator("worst")}</button></th>
+              <th><button type="button" data-product-sort="status">Status${sortIndicator("status")}</button></th>
+              <th><button type="button" data-product-sort="nextEvent">Next Event${sortIndicator("nextEvent")}</button></th>
+              <th><button type="button" data-product-sort="paymentDate">Payment Date${sortIndicator("paymentDate")}</button></th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((product) => {
         const worst = worstLevel(product);
         return `
-          <article class="product-card">
-            <div>
-              <div class="product-title">${product.title}</div>
-              <p class="product-meta">${product.description}</p>
-            </div>
-            <div class="product-secondary">
-              <div class="product-kv"><span>Issuer</span><strong>${product.issuer}</strong></div>
-              <div class="product-kv"><span>ISIN</span><strong>${product.isin}</strong></div>
-              <div class="product-kv"><span>Amount</span><strong>${product.amount}</strong></div>
-            </div>
-            <div class="product-secondary">
-              <div class="product-kv"><span>Worst Level</span><strong>${formatPct(worst)}</strong></div>
-              <div class="product-kv"><span>Next Event</span><strong>${product.nextEvent.name}</strong></div>
-              <div class="product-kv"><span>Payment Date</span><strong>${product.nextEvent.paymentDate}</strong></div>
-            </div>
-            <div class="product-secondary">
-              <span class="status-pill ${statusClass(product.status)}">${product.status}</span>
-              <button class="open-button" type="button" data-open-detail="${product.id}">Open Detail</button>
-            </div>
-          </article>
+          <tr>
+            <td>
+              <strong>${product.title}</strong>
+              <span>${product.description}</span>
+            </td>
+            <td>${product.issuer}</td>
+            <td>${product.isin}</td>
+            <td>${product.amount}</td>
+            <td>${formatPct(worst)}</td>
+            <td><span class="status-pill ${statusClass(product.status)}">${product.status}</span></td>
+            <td>${product.nextEvent.name}</td>
+            <td>${product.nextEvent.paymentDate}</td>
+            <td><button class="open-button" type="button" data-open-detail="${product.id}">Open Detail</button></td>
+          </tr>
         `;
-      }).join("")
+      }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `
     : `<div class="empty-state">No structured products match the current filters.</div>`;
 }
 
@@ -1255,7 +1306,7 @@ function openDetail(productId) {
 
 function backToLifecycle() {
   state.selectedProductId = null;
-  setView("lifecycleList");
+  setView("dashboard");
 }
 
 function renderAll() {
@@ -1323,6 +1374,18 @@ document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-open-detail]");
   if (trigger) {
     openDetail(trigger.dataset.openDetail);
+    return;
+  }
+
+  const productSort = event.target.closest("[data-product-sort]");
+  if (productSort) {
+    const key = productSort.dataset.productSort;
+    const current = state.productSort;
+    state.productSort = {
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    };
+    renderProducts();
     return;
   }
 

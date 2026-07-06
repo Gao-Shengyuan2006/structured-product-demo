@@ -330,7 +330,6 @@ h3 {
 
 .panel,
 .summary-card,
-.product-card,
 .monitor-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -777,30 +776,69 @@ button:focus-visible {
   align-items: flex-start;
 }
 
-.product-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.8fr) minmax(240px, 1fr) auto;
-  align-items: center;
-  gap: 16px;
-  padding: 14px;
+.product-table-wrap {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--surface);
 }
 
-.product-secondary {
-  display: grid;
-  gap: 6px;
+.product-table {
+  width: 100%;
+  min-width: 1160px;
+  border-collapse: collapse;
+  font-size: 13px;
 }
 
-.product-kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.product-table th,
+.product-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.product-table th {
+  background: var(--surface-soft);
   color: var(--muted);
   font-size: 12px;
+  font-weight: 500;
 }
 
-.product-kv strong {
+.product-table th button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.product-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.product-table tbody tr:hover {
+  background: var(--surface-soft);
+}
+
+.product-table td:first-child {
+  min-width: 240px;
+}
+
+.product-table td:first-child strong {
+  display: block;
+  margin-bottom: 3px;
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.product-table td:first-child span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .open-button {
@@ -1242,10 +1280,6 @@ button:focus-visible {
 
   .event-summary-rail::before {
     display: none;
-  }
-
-  .product-card {
-    grid-template-columns: 1fr;
   }
 
   .quote-form,
