@@ -178,7 +178,7 @@ const state = {
   clientFilter: "All",
   custodianFilter: "All",
   breakdownMode: "issuer",
-  view: "dashboard",
+  view: "lifecycleList",
   selectedProductId: null,
   quoteProductType: "FCN",
   quotePreview: null,
@@ -1205,40 +1205,41 @@ function viewFromHash() {
     state.selectedProductId = decodeURIComponent(hash.slice("lifecycle-detail/".length));
     return "lifecycleDetail";
   }
+  if (hash === "dashboard") return "lifecycleList";
   if (hash === "upload-termsheet") return "uploadTermsheet";
   if (hash === "new-quote") return "newQuote";
   if (hash === "rfq-overview") return "rfqOverview";
   if (hash === "lifecycle-list") return "lifecycleList";
-  return "dashboard";
+  return "lifecycleList";
 }
 
 function setView(view, opts = {}) {
-  state.view = view;
+  const normalizedView = view === "dashboard" ? "lifecycleList" : view;
+  state.view = normalizedView;
   const mainPageHeader = document.getElementById("mainPageHeader");
-  if (mainPageHeader) mainPageHeader.classList.toggle("hidden", view === "lifecycleDetail");
+  if (mainPageHeader) mainPageHeader.classList.toggle("hidden", normalizedView === "lifecycleDetail");
   document.querySelectorAll("[data-view]").forEach((node) => {
-    node.classList.toggle("hidden", node.dataset.view !== view && !(view === "dashboard" && node.dataset.view === "lifecycleList"));
+    const visible = node.dataset.view === normalizedView || (normalizedView === "lifecycleList" && node.dataset.view === "dashboard");
+    node.classList.toggle("hidden", !visible);
   });
   document.querySelectorAll("[data-view-link]").forEach((link) => {
-    link.classList.toggle("current", link.dataset.viewLink === view);
+    link.classList.toggle("current", link.dataset.viewLink === normalizedView);
   });
-  if (view === "rfqOverview") renderRfqOverview();
-  if (view === "newQuote") {
+  if (normalizedView === "rfqOverview") renderRfqOverview();
+  if (normalizedView === "newQuote") {
     renderQuoteSourceOptions();
     scheduleQuotePreview();
   }
   if (!opts.skipHash) {
-    const hash = view === "lifecycleDetail" && state.selectedProductId
+    const hash = normalizedView === "lifecycleDetail" && state.selectedProductId
       ? `lifecycle-detail/${encodeURIComponent(state.selectedProductId)}`
-      : view === "uploadTermsheet"
+      : normalizedView === "uploadTermsheet"
       ? "upload-termsheet"
-      : view === "newQuote"
+      : normalizedView === "newQuote"
       ? "new-quote"
-      : view === "rfqOverview"
+      : normalizedView === "rfqOverview"
         ? "rfq-overview"
-        : view === "lifecycleList"
-          ? "lifecycle-list"
-          : "dashboard";
+        : "lifecycle-list";
     window.history.replaceState(null, "", `#${hash}`);
   }
 }
@@ -1364,7 +1365,7 @@ function openDetail(productId) {
 
 function backToLifecycle() {
   state.selectedProductId = null;
-  setView("dashboard");
+  setView("lifecycleList");
 }
 
 function renderAll() {

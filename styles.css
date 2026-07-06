@@ -102,7 +102,8 @@ button {
   padding: 0 10px;
 }
 
-.nav-list a {
+.nav-list a,
+.nav-list .nav-label {
   min-height: 34px;
   display: flex;
   align-items: center;
@@ -114,15 +115,25 @@ button {
   font-weight: 400;
 }
 
+.nav-list .nav-label {
+  color: var(--muted);
+  cursor: default;
+}
+
 .nav-list a.active,
 .nav-list a.current {
   background: #f1f2f6;
 }
 
-.nav-list a.nested {
+.nav-list a.nested,
+.nav-list .nav-label.nested {
   margin-left: 24px;
   color: #3f3f46;
   font-size: 13px;
+}
+
+.nav-list .nav-label.nested {
+  color: var(--muted);
 }
 
 .nav-group {
