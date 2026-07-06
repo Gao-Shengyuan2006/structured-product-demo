@@ -27,6 +27,7 @@ const products = [
     tradeOrderId: "T-260118-001",
     isin: "XS2812345678",
     client: "Demo Client A",
+    rm: "RM Team 1",
     amount: "1,000,000.00 USD",
     issuer: "J.P. Morgan",
     latestEvent: { name: "Observation", valuationDate: "2026-06-18", monitorResult: "Not Triggered" },
@@ -54,6 +55,7 @@ const products = [
     tradeOrderId: "T-260207-004",
     isin: "XS2819876543",
     client: "Demo Client A",
+    rm: "RM Team 1",
     amount: "650,000.00 USD",
     issuer: "Morgan Stanley",
     latestEvent: { name: "Initial Fixing", valuationDate: "2026-02-07", monitorResult: "Fixed" },
@@ -80,6 +82,7 @@ const products = [
     tradeOrderId: "T-250712-002",
     isin: "XS2799001122",
     client: "Demo Client B",
+    rm: "RM Team 2",
     amount: "5,000,000.00 HKD",
     issuer: "UBS",
     latestEvent: { name: "Fixing", valuationDate: "2026-07-01", monitorResult: "Observed" },
@@ -560,6 +563,20 @@ function withPerformance(product) {
   };
 }
 
+function uniqueOptions(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort((left, right) => String(left).localeCompare(String(right)));
+}
+
+function buildFilterOptions(rows) {
+  return {
+    rms: uniqueOptions(rows.map((product) => product.rm || product.relationshipManager || product.relationship_manager || "Unassigned RM")),
+    clients: uniqueOptions(rows.map((product) => product.client)),
+    custodians: uniqueOptions(rows.map((product) => product.issuer)),
+    accounts: uniqueOptions(rows.map((product) => product.account || product.accountNumber || product.tradeOrderId)),
+    source: "demo-backend-filter-options",
+  };
+}
+
 function productFromParsedTermsheet(parsed, payload, taskId) {
   const issueDate = parsed.issueDate || todayIso();
   const maturityDate = parsed.maturityDate || addMonths(issueDate, 6);
@@ -579,6 +596,7 @@ function productFromParsedTermsheet(parsed, payload, taskId) {
     tradeOrderId: `UPLOAD-${taskId.slice(0, 8).toUpperCase()}`,
     isin: parsed.isin,
     client: `Client ${payload.client_id}`,
+    rm: "Uploaded RM",
     amount: formatMoney(parsed.principal || 1000000, parsed.currency || "USD"),
     issuer: parsed.issuer || "Parsed Issuer",
     latestEvent: { name: "Final Fixing", valuationDate: finalValuationDate, monitorResult: status === "Matured" ? "Observed" : "Scheduled" },
@@ -626,6 +644,7 @@ function inferProductFromUpload(payload, taskId) {
     tradeOrderId: `UPLOAD-${taskId.slice(0, 8).toUpperCase()}`,
     isin: `XS${isinSeed}`,
     client: `Client ${payload.client_id}`,
+    rm: "Uploaded RM",
     amount: "1,000,000.00 USD",
     issuer: "Uploaded Issuer",
     latestEvent: { name: "Termsheet Parsed", valuationDate: issueDate, monitorResult: "Parsed" },
@@ -687,6 +706,7 @@ async function handleApi(req, res, url) {
     const rows = products.map(withPerformance);
     sendJson(res, 200, {
       positions: rows,
+      filters: buildFilterOptions(rows),
       latestEvents: rows.map((product, index) => ({
         id: `${product.id}:${index}`,
         type: product.latestEvent.name,
@@ -700,6 +720,12 @@ async function handleApi(req, res, url) {
       pageSize: rows.length,
       source: "demo-backend",
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/sp/filter-options") {
+    const rows = products.map(withPerformance);
+    sendJson(res, 200, buildFilterOptions(rows));
     return;
   }
 

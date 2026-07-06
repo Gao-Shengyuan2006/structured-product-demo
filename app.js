@@ -12,6 +12,7 @@ const demoProducts = [
     tradeOrderId: "T-260118-001",
     isin: "XS2812345678",
     client: "Demo Client A",
+    rm: "RM Team 1",
     amount: "1,000,000.00 USD",
     description: "Autocallable fixed coupon note linked to MSFT and NVDA.",
     latestEvent: { name: "Observation", valuationDate: "2026-06-18", monitorResult: "Not Triggered" },
@@ -46,6 +47,7 @@ const demoProducts = [
     tradeOrderId: "T-260207-004",
     isin: "XS2819876543",
     client: "Demo Client A",
+    rm: "RM Team 1",
     amount: "650,000.00 USD",
     description: "Equity linked note with downside delivery risk.",
     latestEvent: { name: "Initial Fixing", valuationDate: "2026-02-07", monitorResult: "Fixed" },
@@ -78,6 +80,7 @@ const demoProducts = [
     tradeOrderId: "T-250712-002",
     isin: "XS2799001122",
     client: "Demo Client B",
+    rm: "RM Team 2",
     amount: "5,000,000.00 HKD",
     description: "Principal protected deposit with index-linked enhanced return.",
     latestEvent: { name: "Fixing", valuationDate: "2026-07-01", monitorResult: "Observed" },
@@ -110,6 +113,7 @@ const demoProducts = [
     tradeOrderId: "T-251120-008",
     isin: "XS2800123456",
     client: "Demo Client C",
+    rm: "RM Team 2",
     amount: "800,000.00 USD",
     description: "Step-down autocall note linked to TSLA and AMD.",
     latestEvent: { name: "KnockOut", valuationDate: "2026-05-20", monitorResult: "Crossed" },
@@ -143,6 +147,7 @@ const demoProducts = [
     tradeOrderId: "T-250910-003",
     isin: "XS2777009911",
     client: "Demo Client D",
+    rm: "RM Team 3",
     amount: "700,000.00 EUR",
     description: "Dual currency note with alternate currency settlement.",
     latestEvent: { name: "Redemption", valuationDate: "2026-03-10", monitorResult: "Settled" },
@@ -169,6 +174,9 @@ const state = {
   rfqSearch: "",
   rfqStatus: "All Status",
   productSort: { key: "product", direction: "asc" },
+  rmFilter: "All",
+  clientFilter: "All",
+  custodianFilter: "All",
   breakdownMode: "issuer",
   view: "dashboard",
   selectedProductId: null,
@@ -221,8 +229,17 @@ function apiUrl(path) {
   return `${base}${path}`;
 }
 
+function topFilteredProducts() {
+  return activeProducts.filter((product) => {
+    const rmOk = state.rmFilter === "All" || product.rm === state.rmFilter;
+    const clientOk = state.clientFilter === "All" || product.client === state.clientFilter;
+    const custodianOk = state.custodianFilter === "All" || product.issuer === state.custodianFilter;
+    return rmOk && clientOk && custodianOk;
+  });
+}
+
 function buildUpcomingEvents() {
-  return activeProducts
+  return topFilteredProducts()
     .filter((product) => product.nextEvent.paymentDate !== "—")
     .map((product) => ({
       id: product.id,
@@ -265,6 +282,7 @@ function normalizeBackendProduct(position) {
     tradeOrderId: position.tradeOrderId || "—",
     isin: position.isin || "—",
     client: position.client || "—",
+    rm: position.rm || position.relationshipManager || position.relationship_manager || position.owner || "Unassigned RM",
     amount: position.amount || "—",
     description: position.description || "Structured product imported from WealthPilot lifecycle API.",
     latestEvent: position.latestEvent || { name: "—", valuationDate: "—", monitorResult: "—" },
@@ -632,7 +650,7 @@ function renderCashflows(detail) {
 
 function filteredProducts() {
   const query = state.search.trim().toLowerCase();
-  return activeProducts.filter((product) => {
+  return topFilteredProducts().filter((product) => {
     const statusOk = state.status === "All" || product.status === state.status;
     const haystack = [
       product.title,
@@ -677,12 +695,13 @@ function sortIndicator(key) {
 }
 
 function renderSummary() {
+  const products = topFilteredProducts();
   const upcomingEvents = buildUpcomingEvents();
   const counts = [
-    ["All Products", activeProducts.length],
-    ["Outstanding", activeProducts.filter((p) => p.status === "Outstanding").length],
-    ["Early Called", activeProducts.filter((p) => p.status === "Early Called").length],
-    ["Matured", activeProducts.filter((p) => p.status === "Matured").length],
+    ["All Products", products.length],
+    ["Outstanding", products.filter((p) => p.status === "Outstanding").length],
+    ["Early Called", products.filter((p) => p.status === "Early Called").length],
+    ["Matured", products.filter((p) => p.status === "Matured").length],
     ["Upcoming Events", upcomingEvents.length],
   ];
   document.getElementById("summaryGrid").innerHTML = counts
@@ -704,12 +723,16 @@ function breakdownKey(product) {
 
 function renderBreakdown() {
   const groups = new Map();
-  for (const product of activeProducts) {
+  for (const product of topFilteredProducts()) {
     const key = breakdownKey(product);
     const current = groups.get(key) || { count: 0, notionalText: [] };
     current.count += 1;
     current.notionalText.push(product.amount);
     groups.set(key, current);
+  }
+  if (!groups.size) {
+    document.getElementById("breakdownList").innerHTML = `<div class="empty-state">No issue breakdown for the selected filters.</div>`;
+    return;
   }
   const max = Math.max(...Array.from(groups.values()).map((item) => item.count));
   const rows = Array.from(groups.entries()).sort((a, b) => b[1].count - a[1].count);
@@ -742,7 +765,11 @@ function renderEvents() {
 }
 
 function renderMonitor() {
-  const monitorProducts = activeProducts.slice(0, 3);
+  const monitorProducts = topFilteredProducts().slice(0, 3);
+  if (!monitorProducts.length) {
+    document.getElementById("monitorGrid").innerHTML = `<div class="empty-state">No monitor inputs match the selected filters.</div>`;
+    return;
+  }
   document.getElementById("monitorGrid").innerHTML = monitorProducts
     .map((product) => {
       const worst = worstLevel(product);
@@ -862,6 +889,37 @@ function renderRfqOverview() {
       </button>
     `).join("") : `<div class="rfq-empty">No RFQs match the current filters.</div>`}
   `;
+}
+
+function uniqueSorted(values) {
+  return Array.from(new Set(values.filter((value) => value && value !== "—"))).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function renderSelectOptions(selectId, allLabel, values, currentValue) {
+  const select = document.getElementById(selectId);
+  if (!select) return "All";
+  const normalizedValues = uniqueSorted(values);
+  const nextValue = currentValue !== "All" && normalizedValues.includes(currentValue) ? currentValue : "All";
+  select.innerHTML = `
+    <option value="All">${allLabel}</option>
+    ${normalizedValues.map((value) => `<option value="${value}">${value}</option>`).join("")}
+  `;
+  select.value = nextValue;
+  return nextValue;
+}
+
+function renderTopFilters() {
+  state.rmFilter = renderSelectOptions("rmFilter", "All RMs", activeProducts.map((product) => product.rm), state.rmFilter);
+  state.clientFilter = renderSelectOptions("clientFilter", "All clients", activeProducts.map((product) => product.client), state.clientFilter);
+  state.custodianFilter = renderSelectOptions("custodianFilter", "All custodians", activeProducts.map((product) => product.issuer), state.custodianFilter);
+}
+
+function rerenderDashboardData() {
+  renderSummary();
+  renderBreakdown();
+  renderEvents();
+  renderMonitor();
+  renderProducts();
 }
 
 function quoteSourceProducts() {
@@ -1310,11 +1368,8 @@ function backToLifecycle() {
 }
 
 function renderAll() {
-  renderSummary();
-  renderBreakdown();
-  renderEvents();
-  renderMonitor();
-  renderProducts();
+  renderTopFilters();
+  rerenderDashboardData();
   renderRfqOverview();
   renderQuoteSourceOptions();
   scheduleQuotePreview();
@@ -1338,6 +1393,21 @@ document.getElementById("statusFilter").addEventListener("change", (event) => {
 document.getElementById("searchInput").addEventListener("input", (event) => {
   state.search = event.target.value;
   renderProducts();
+});
+
+document.getElementById("rmFilter").addEventListener("change", (event) => {
+  state.rmFilter = event.target.value;
+  rerenderDashboardData();
+});
+
+document.getElementById("clientFilter").addEventListener("change", (event) => {
+  state.clientFilter = event.target.value;
+  rerenderDashboardData();
+});
+
+document.getElementById("custodianFilter").addEventListener("change", (event) => {
+  state.custodianFilter = event.target.value;
+  rerenderDashboardData();
 });
 
 document.getElementById("rfqSearchInput").addEventListener("input", (event) => {
